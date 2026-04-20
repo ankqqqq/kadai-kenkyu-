@@ -83,24 +83,35 @@ function parseCSV(csvText) {
 
   const clean = s => s.replace(/\u3000/g, " ").trim();
 
-  return dataLines.map((line, i) => {
-    const c = line.split(",");
+  return dataLines
+    .map((line, i) => {
+      const c = line.split(",");
 
-    return {
-      id: i + 1,
-      lat: parseFloat(c[1]),
-      lon: parseFloat(c[0]),
-      type: mapType(clean(c[7]), clean(c[10])),
+      const party1 = clean(c[18]);
+      const party2 = clean(c[20]);
 
-      meta: {
-        date: c[8],
-        weather: clean(c[12]),
-        road: clean(c[15])
-      }
-    };
-  });
+      // 🚲 自転車判定
+      const isBike =
+        party1.includes("自転車") ||
+        party2.includes("自転車");
+
+      if (!isBike) return null;
+
+      return {
+        id: i + 1,
+        lat: parseFloat(c[1]),
+        lon: parseFloat(c[0]),
+        type: mapType(clean(c[7]), clean(c[10])),
+
+        meta: {
+          party1,
+          party2,
+          date: c[8]
+        }
+      };
+    })
+    .filter(Boolean); // null除去
 }
-
 // =======================
 // 🚨 タイプ変換
 // =======================
