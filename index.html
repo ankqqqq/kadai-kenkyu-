@@ -77,42 +77,41 @@ async function loadCSV() {
 // =======================
 // 🔄 CSVパース
 // =======================
-return dataLines
-  .map((line, i) => {
-    const c = line.split(",");
+function parseCSV(csvText) {
+  const lines = csvText.trim().split("\n").filter(l => l.trim());
+  const dataLines = lines.slice(1);
 
-    const hour = c[9];
+  const clean = s => s.replace(/\u3000/g, " ").trim();
 
-    // ⛔ 朝夕以外は捨てる
-    if (!isRushHour(hour)) return null;
+  return dataLines
+    .map((line, i) => {
+      const c = line.split(",");
 
-    const party1 = clean(c[18]);
-    const party2 = clean(c[20]);
+      const party1 = clean(c[18]);
+      const party2 = clean(c[20]);
 
-    const isBikeAccident =
-      party1.includes("自転車") ||
-      party2.includes("自転車") ||
-      party1.includes("軽車両") ||
-      party2.includes("軽車両");
+      // 🚲 自転車判定
+      const isBike =
+        party1.includes("自転車") ||
+        party2.includes("自転車");
 
-    if (!isBikeAccident) return null;
+      if (!isBike) return null;
 
-    return {
-      id: i + 1,
-      lat: parseFloat(c[1]),
-      lon: parseFloat(c[0]),
-      hour: Number(hour),
+      return {
+        id: i + 1,
+        lat: parseFloat(c[1]),
+        lon: parseFloat(c[0]),
+        type: mapType(clean(c[7]), clean(c[10])),
 
-      type: mapType(clean(c[7]), clean(c[10])),
-
-      meta: {
-        date: c[8],
-        party1,
-        party2
-      }
-    };
-  })
-  .filter(Boolean);
+        meta: {
+          party1,
+          party2,
+          date: c[8]
+        }
+      };
+    })
+    .filter(Boolean); // null除去
+}
 // =======================
 // 🚨 タイプ変換
 // =======================
