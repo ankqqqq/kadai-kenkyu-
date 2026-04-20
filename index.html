@@ -236,3 +236,69 @@ startGPS();
 
 </body>
 </html>
+function calcRiskAreas(data) {
+  const areas = [];
+
+  data.forEach((a, i) => {
+    let score = 0;
+
+    data.forEach(b => {
+      const d = distance(a.lat, a.lon, b.lat, b.lon);
+
+      if (d < 100) score += 3;
+      else if (d < 200) score += 1;
+    });
+
+    if (score < 10) return;
+
+    areas.push({
+      lat: a.lat,
+      lon: a.lon,
+      score
+    });
+  });
+
+  return areas;
+}
+      let riskLayer = [];
+
+function drawRiskAreas() {
+  const areas = calcRiskAreas(accidentData);
+
+  // 既存削除
+  riskLayer.forEach(l => map.removeLayer(l));
+  riskLayer = [];
+
+  areas.forEach(a => {
+    let color = "#22c55e";
+    let radius = 80;
+
+    if (a.score > 20) {
+      color = "#facc15";
+      radius = 120;
+    }
+
+    if (a.score > 40) {
+      color = "#ef4444";
+      radius = 180;
+    }
+
+    const circle = L.circle([a.lat, a.lon], {
+      radius: radius,
+      color: color,
+      fillColor: color,
+      fillOpacity: 0.25
+    }).addTo(map);
+
+    circle.bindPopup(`危険度: ${a.score}`);
+
+    riskLayer.push(circle);
+  });
+}
+      loadCSV().then(() => {
+  drawRiskAreas();
+});
+      function distance(lat1, lon1, lat2, lon2) {
+  return Math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2) * 111000;
+}
+      
