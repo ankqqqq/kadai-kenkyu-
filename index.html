@@ -81,36 +81,48 @@ function parseCSV(csvText) {
   const lines = csvText.trim().split("\n").filter(l => l.trim());
   const dataLines = lines.slice(1);
 
-  const clean = s => s.replace(/\u3000/g, " ").trim();
+  const clean = s => (s ?? "").replace(/\u3000/g, " ").trim();
 
   return dataLines
     .map((line, i) => {
       const c = line.split(",");
 
-      const party1 = clean(c[18]);
-      const party2 = clean(c[20]);
+      const party1 = clean(c[18]); // 1当種別
+      const party2 = clean(c[20]); // 2当種別
 
-      // 🚲 自転車判定
-      const isBike =
+      // 🚲 自転車が関係しているか判定
+      const isBikeAccident =
         party1.includes("自転車") ||
-        party2.includes("自転車");
+        party2.includes("自転車") ||
+        party1.includes("軽車両") ||
+        party2.includes("軽車両");
 
-      if (!isBike) return null;
+      // 🚫 自転車が絡まない事故は捨てる
+      if (!isBikeAccident) return null;
 
       return {
         id: i + 1,
         lat: parseFloat(c[1]),
         lon: parseFloat(c[0]),
+
         type: mapType(clean(c[7]), clean(c[10])),
 
         meta: {
+          year: c[2],
+          month: c[3],
+          city: clean(c[5]),
+          accident: clean(c[6]),
+          collision: clean(c[7]),
+          date: c[8],
+          hour: c[9],
+          weather: clean(c[12]),
+          road: clean(c[15]),
           party1,
-          party2,
-          date: c[8]
+          party2
         }
       };
     })
-    .filter(Boolean); // null除去
+    .filter(Boolean); // null削除
 }
 // =======================
 // 🚨 タイプ変換
