@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>自転車事故危険度マップ（CSV版）</title>
+<title>自転車事故危険度マップ</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -21,18 +21,6 @@ body { margin:0; font-family:sans-serif; }
   border-radius:12px;
   width:260px;
 }
-
-.risk { font-size:18px; font-weight:bold; }
-
-button {
-  width:100%;
-  margin-top:8px;
-  padding:8px;
-  border:none;
-  border-radius:8px;
-  background:#3b82f6;
-  color:white;
-}
 </style>
 </head>
 
@@ -48,8 +36,9 @@ button {
 <div id="map"></div>
 
 <script>
+
 // =======================
-// 🗺️ 地図
+// 🗺️ MAP
 // =======================
 const map = L.map('map').setView([38.26, 140.87], 13);
 
@@ -58,27 +47,27 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 }).addTo(map);
 
 // =======================
-// 📦 データ
+// 📦 DATA
 // =======================
 let accidentData = [];
+let pointLayer = L.layerGroup().addTo(map);
 
 // =======================
-// 📥 CSV読み込み
+// 📥 CSV
 // =======================
 async function loadCSV() {
   const res = await fetch("jikoopendata.csv");
   const text = await res.text();
 
   accidentData = parseCSV(text);
-
   drawPoints();
 }
 
 // =======================
-// 🔄 CSVパース
+// 🔄 CSV PARSE
 // =======================
 function parseCSV(csvText) {
-  const lines = csvText.trim().split("\n").filter(l => l.trim());
+  const lines = csvText.trim().split("\n").filter(l => l);
   const dataLines = lines.slice(1);
 
   const clean = (s) => (s ?? "").replace(/\u3000/g, " ").trim();
@@ -90,7 +79,6 @@ function parseCSV(csvText) {
       const party1 = clean(c[18]);
       const party2 = clean(c[20]);
 
-      // 🚲 自転車判定
       const isBike =
         party1.includes("自転車") ||
         party2.includes("自転車") ||
@@ -100,37 +88,36 @@ function parseCSV(csvText) {
       if (!isBike) return null;
 
       return {
-        id: i + 1,
+        id: i,
         lat: parseFloat(c[1]),
         lon: parseFloat(c[0]),
-
+        hour: Number(c[9]),
         type: mapType(clean(c[7]), clean(c[10])),
-
-        meta: {
-          party1,
-          party2,
-          date: c[8]
-        }
+        meta: { date: c[8], party1, party2 }
       };
     })
     .filter(Boolean);
 }
+
 // =======================
-// 🚨 タイプ変換
+// 🚨 TYPE
 // =======================
 function mapType(type, daytime) {
   if (daytime.includes("夜")) return "night_accident";
-  if (type.includes("車両相互")) return "car_bike";
   if (type.includes("交差点")) return "intersection";
   if (type.includes("単独") || type.includes("転倒")) return "bike_fall";
   return "car_bike";
 }
 
 // =======================
-// 📍 描画
+// 📍 DRAW
 // =======================
 function drawPoints() {
+
+  pointLayer.clearLayers();
+
   accidentData.forEach(a => {
+
     let color = "red";
     if (a.type === "intersection") color = "orange";
     if (a.type === "night_accident") color = "purple";
@@ -138,26 +125,33 @@ function drawPoints() {
 
     L.circleMarker([a.lat, a.lon], {
       radius: 5,
-      color: color
-    }).addTo(map)
-      .bindPopup(${a.type}<br>${a.meta.date});
+      color
+    }).addTo(pointLayer)
+      .bindPopup(`
+        ${a.type}<br>
+        ${a.meta.date}
+      `);
   });
 }
 
 // =======================
-// 📏 距離
+// 📏 DISTANCE
 // =======================
 function distance(lat1, lon1, lat2, lon2) {
   return Math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2) * 111000;
 }
 
 // =======================
-// ⚠️ 危険度
+// ⚠️ RISK
 // =======================
 function calcRisk() {
+
+  if (userLat == null) return 0;
+
   let score = 0;
 
   accidentData.forEach(a => {
+
     const d = distance(userLat, userLon, a.lat, a.lon);
 
     if (d < 80) score += 25;
@@ -175,8 +169,8 @@ function calcRisk() {
 // 🎨 UI
 // =======================
 function updateUI() {
-  const risk = calcRisk();
   const el = document.getElementById("risk");
+  const risk = calcRisk();
 
   el.innerText = risk;
 
@@ -198,6 +192,7 @@ let userMarker = null;
 
 function startGPS() {
   navigator.geolocation.watchPosition(pos => {
+
     userLat = pos.coords.latitude;
     userLon = pos.coords.longitude;
 
@@ -205,31 +200,28 @@ function startGPS() {
       userLat.toFixed(5) + ", " + userLon.toFixed(5);
 
     if (!userMarker) {
-      userMarker = L.marker([userLat, userLon]).addTo(map)
-        .bindPopup("現在地");
+      userMarker = L.marker([userLat, userLon]).addTo(map);
     } else {
       userMarker.setLatLng([userLat, userLon]);
     }
 
     map.setView([userLat, userLon]);
+
     updateUI();
 
   }, err => {
-    console.log("GPS失敗", err);
 
-    // fallback（仙台駅付近）
     userLat = 38.260;
     userLon = 140.882;
+
     document.getElementById("pos").innerText = "GPS失敗（モック）";
 
     updateUI();
-  }, {
-    enableHighAccuracy: true
   });
 }
 
 // =======================
-// 🚀 起動
+// 🚀 START
 // =======================
 loadCSV();
 startGPS();
