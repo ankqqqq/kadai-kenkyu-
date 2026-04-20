@@ -66,7 +66,7 @@ let accidentData = [];
 // 📥 CSV読み込み
 // =======================
 async function loadCSV() {
-  const res = await fetch("data/jikoopendata.csv");
+  const res = await fetch("jikoopendata.csv");
   const text = await res.text();
 
   accidentData = parseCSV(text);
