@@ -39,7 +39,7 @@ button {
 <body>
 
 <div class="panel">
-  🚲 自転車事故マップ<br>
+  🚲 通学用自転車事故マップ<br>
   危険度: <span id="risk">--</span><br>
   現在地: <span id="pos">取得中...</span>
   <button onclick="recalc()">再計算</button>
@@ -77,53 +77,42 @@ async function loadCSV() {
 // =======================
 // 🔄 CSVパース
 // =======================
-function parseCSV(csvText) {
-  const lines = csvText.trim().split("\n").filter(l => l.trim());
-  const dataLines = lines.slice(1);
+return dataLines
+  .map((line, i) => {
+    const c = line.split(",");
 
-  const clean = s => (s ?? "").replace(/\u3000/g, " ").trim();
+    const hour = c[9];
 
-  return dataLines
-    .map((line, i) => {
-      const c = line.split(",");
+    // ⛔ 朝夕以外は捨てる
+    if (!isRushHour(hour)) return null;
 
-      const party1 = clean(c[18]); // 1当種別
-      const party2 = clean(c[20]); // 2当種別
+    const party1 = clean(c[18]);
+    const party2 = clean(c[20]);
 
-      // 🚲 自転車が関係しているか判定
-      const isBikeAccident =
-        party1.includes("自転車") ||
-        party2.includes("自転車") ||
-        party1.includes("軽車両") ||
-        party2.includes("軽車両");
+    const isBikeAccident =
+      party1.includes("自転車") ||
+      party2.includes("自転車") ||
+      party1.includes("軽車両") ||
+      party2.includes("軽車両");
 
-      // 🚫 自転車が絡まない事故は捨てる
-      if (!isBikeAccident) return null;
+    if (!isBikeAccident) return null;
 
-      return {
-        id: i + 1,
-        lat: parseFloat(c[1]),
-        lon: parseFloat(c[0]),
+    return {
+      id: i + 1,
+      lat: parseFloat(c[1]),
+      lon: parseFloat(c[0]),
+      hour: Number(hour),
 
-        type: mapType(clean(c[7]), clean(c[10])),
+      type: mapType(clean(c[7]), clean(c[10])),
 
-        meta: {
-          year: c[2],
-          month: c[3],
-          city: clean(c[5]),
-          accident: clean(c[6]),
-          collision: clean(c[7]),
-          date: c[8],
-          hour: c[9],
-          weather: clean(c[12]),
-          road: clean(c[15]),
-          party1,
-          party2
-        }
-      };
-    })
-    .filter(Boolean); // null削除
-}
+      meta: {
+        date: c[8],
+        party1,
+        party2
+      }
+    };
+  })
+  .filter(Boolean);
 // =======================
 // 🚨 タイプ変換
 // =======================
