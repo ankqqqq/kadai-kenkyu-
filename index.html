@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<title>自転車事故危険度マップ（CSV版）</title>
+<title>自転車事故マップ（時間帯フィルタ付き）</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -19,10 +19,8 @@ body { margin:0; font-family:sans-serif; }
   color:white;
   padding:12px;
   border-radius:12px;
-  width:260px;
+  width:280px;
 }
-
-.risk { font-size:18px; font-weight:bold; }
 
 button {
   width:100%;
@@ -40,8 +38,15 @@ button {
 
 <div class="panel">
   🚲 通学用自転車事故マップ<br>
+
   危険度: <span id="risk">--</span><br>
-  現在地: <span id="pos">取得中...</span>
+  現在地: <span id="pos">取得中...</span><br><br>
+
+  <label>
+    <input type="checkbox" id="filterRush" onchange="drawPoints()">
+    朝夕のみ（7-9 / 17-19）
+  </label>
+
   <button onclick="recalc()">再計算</button>
 </div>
 
@@ -62,11 +67,14 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 // =======================
 let accidentData = [];
 
+// レイヤー
+let pointLayer = L.layerGroup().addTo(map);
+
 // =======================
 // 📥 CSV読み込み
 // =======================
 async function loadCSV() {
-  const res = await fetch("jikoopendata.csv");
+  const res = await fetch("data/aaa.csv");
   const text = await res.text();
 
   accidentData = parseCSV(text);
@@ -77,7 +85,7 @@ async function loadCSV() {
 // =======================
 // 🔄 CSVパース
 // =======================
- function parseCSV(csvText) {
+function parseCSV(csvText) {
   const lines = csvText.trim().split("\n").filter(l => l.trim());
   const dataLines = lines.slice(1);
 
@@ -90,7 +98,7 @@ async function loadCSV() {
       const party1 = clean(c[18]);
       const party2 = clean(c[20]);
 
-      // 🚲 自転車判定
+      // 🚲 自転車だけ抽出
       const isBike =
         party1.includes("自転車") ||
         party2.includes("自転車") ||
@@ -103,18 +111,20 @@ async function loadCSV() {
         id: i + 1,
         lat: parseFloat(c[1]),
         lon: parseFloat(c[0]),
+        hour: Number(c[9]),
 
         type: mapType(clean(c[7]), clean(c[10])),
 
         meta: {
+          date: c[8],
           party1,
-          party2,
-          date: c[8]
+          party2
         }
       };
     })
     .filter(Boolean);
 }
+
 // =======================
 // 🚨 タイプ変換
 // =======================
@@ -127,10 +137,25 @@ function mapType(type, daytime) {
 }
 
 // =======================
+// ⏰ 朝夕フィルタ
+// =======================
+function isRushHour(hour) {
+  const h = Number(hour);
+  return (h >= 7 && h <= 9) || (h >= 17 && h <= 19);
+}
+
+// =======================
 // 📍 描画
 // =======================
 function drawPoints() {
+  pointLayer.clearLayers();
+
+  const onlyRush = document.getElementById("filterRush").checked;
+
   accidentData.forEach(a => {
+
+    if (onlyRush && !isRushHour(a.hour)) return;
+
     let color = "red";
     if (a.type === "intersection") color = "orange";
     if (a.type === "night_accident") color = "purple";
@@ -138,9 +163,13 @@ function drawPoints() {
 
     L.circleMarker([a.lat, a.lon], {
       radius: 5,
-      color: color
-    }).addTo(map)
-      .bindPopup(`${a.type}<br>${a.meta.date}`);
+      color
+    }).addTo(pointLayer)
+      .bindPopup(`
+        ${a.type}<br>
+        ${a.meta.date}<br>
+        ${a.hour}時
+      `);
   });
 }
 
@@ -187,6 +216,7 @@ function updateUI() {
 
 function recalc() {
   updateUI();
+  drawPoints();
 }
 
 // =======================
@@ -215,16 +245,10 @@ function startGPS() {
     updateUI();
 
   }, err => {
-    console.log("GPS失敗", err);
-
-    // fallback（仙台駅付近）
     userLat = 38.260;
     userLon = 140.882;
     document.getElementById("pos").innerText = "GPS失敗（モック）";
-
     updateUI();
-  }, {
-    enableHighAccuracy: true
   });
 }
 
@@ -238,4 +262,3 @@ startGPS();
 
 </body>
 </html>
-      
