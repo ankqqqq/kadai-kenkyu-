@@ -77,13 +77,7 @@ async function loadCSV() {
 // =======================
 // 🔄 CSVパース
 // =======================
-function parseCSV(csvText) {
-  const lines = csvText.trim().split("\n").filter(l => l.trim());
-  const dataLines = lines.slice(1);
-
-  const clean = s => s.replace(/\u3000/g, " ").trim();
-
-  return dataLines
+ return dataLines
     .map((line, i) => {
       const c = line.split(",");
 
