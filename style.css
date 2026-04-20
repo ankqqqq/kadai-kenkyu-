@@ -1,0 +1,99 @@
+/* 全体 */
+body {
+  margin: 0;
+  font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Noto Sans JP", sans-serif;
+  background: #0f172a;
+  color: #e5e7eb;
+}
+
+/* 地図コンテナ */
+#map {
+  height: 100vh;
+  width: 100%;
+  z-index: 1;
+}
+
+/* 上部の情報パネル */
+.top-bar {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.85);
+  backdrop-filter: blur(10px);
+  padding: 12px 16px;
+  border-radius: 12px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
+  width: 260px;
+}
+
+/* タイトル */
+.top-bar h1 {
+  font-size: 16px;
+  margin: 0 0 8px 0;
+  color: #60a5fa;
+}
+
+/* ステータス表示 */
+.status {
+  font-size: 14px;
+  margin: 6px 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.05);
+}
+
+/* 危険度表示 */
+.risk-low {
+  color: #22c55e;
+}
+
+.risk-mid {
+  color: #facc15;
+}
+
+.risk-high {
+  color: #ef4444;
+}
+
+/* ボタン */
+button {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px;
+  border: none;
+  border-radius: 10px;
+  background: #2563eb;
+  color: white;
+  font-size: 14px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+button:hover {
+  background: #1d4ed8;
+}
+
+/* 下部の説明パネル */
+.bottom-bar {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.85);
+  padding: 10px 14px;
+  border-radius: 12px;
+  font-size: 12px;
+  max-width: 300px;
+}
+
+/* レスポンシブ */
+@media (max-width: 600px) {
+  .top-bar {
+    width: calc(100% - 40px);
+  }
+
+  .bottom-bar {
+    width: calc(100% - 40px);
+  }
+}

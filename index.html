@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>自転車事故危険度マップ（GPS + JSONモック）</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<style>
+body {
+  margin: 0;
+  font-family: sans-serif;
+}
+
+#map {
+  height: 100vh;
+}
+
+/* UI */
+.panel {
+  margin: 5%;
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 999;
+  background: rgba(20,20,30,0.85);
+  color: white;
+  padding: 12px;
+  border-radius: 12px;
+  width: 260px;
+  backdrop-filter: blur(10px);
+}
+
+.risk {
+  font-size: 18px;
+  font-weight: bold;
+}
+
+button {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
+  border: none;
+  border-radius: 8px;
+  background: #3b82f6;
+  color: white;
+  cursor: pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+  🚲 自転車事故マップ<br>
+  危険度: <span id="risk">--</span><br>
+  現在地: <span id="pos">取得中...</span>
+  <button onclick="recalc()">再計算</button>
+</div>
+
+<div id="map"></div>
+
+<script>
+// 🗺️ 地図初期化
+const map = L.map('map').setView([35.7, 139.7], 13);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: "OSM"
+}).addTo(map);
+
+// 🚨 事故データ（JSONモック）
+const accidentData = [
+  // =========================
+  // 🚥 交差点A（高リスク密集）
+  // =========================
+  {id:1, lat:35.7000, lon:139.7000, type:"intersection"},
+  {id:2, lat:35.7000, lon:139.7001, type:"car_bike"},
+  {id:3, lat:35.7001, lon:139.7000, type:"car_bike"},
+  {id:4, lat:35.7001, lon:139.7001, type:"car_bike"},
+  {id:5, lat:35.7002, lon:139.7001, type:"intersection"},
+  {id:6, lat:35.7002, lon:139.7002, type:"car_bike"},
+  {id:7, lat:35.7003, lon:139.7002, type:"car_bike"},
+  {id:8, lat:35.7003, lon:139.7001, type:"intersection"},
+  {id:9, lat:35.7004, lon:139.7000, type:"car_bike"},
+  {id:10, lat:35.7004, lon:139.7002, type:"car_bike"},
+
+  // =========================
+  // 🚗 幹線道路（直線事故列）
+  // =========================
+  {id:11, lat:35.7020, lon:139.7050, type:"car_bike"},
+  {id:12, lat:35.7030, lon:139.7050, type:"car_bike"},
+  {id:13, lat:35.7040, lon:139.7050, type:"car_bike"},
+  {id:14, lat:35.7050, lon:139.7050, type:"car_bike"},
+  {id:15, lat:35.7060, lon:139.7050, type:"intersection"},
+  {id:16, lat:35.7070, lon:139.7050, type:"car_bike"},
+  {id:17, lat:35.7080, lon:139.7050, type:"car_bike"},
+  {id:18, lat:35.7090, lon:139.7050, type:"car_bike"},
+  {id:19, lat:35.7100, lon:139.7050, type:"intersection"},
+  {id:20, lat:35.7110, lon:139.7050, type:"car_bike"},
+
+  // =========================
+  // 🚥 交差点B（中リスク）
+  // =========================
+  {id:21, lat:35.7100, lon:139.7100, type:"intersection"},
+  {id:22, lat:35.7101, lon:139.7100, type:"car_bike"},
+  {id:23, lat:35.7102, lon:139.7101, type:"car_bike"},
+  {id:24, lat:35.7103, lon:139.7102, type:"car_bike"},
+  {id:25, lat:35.7104, lon:139.7103, type:"intersection"},
+  {id:26, lat:35.7105, lon:139.7104, type:"car_bike"},
+  {id:27, lat:35.7106, lon:139.7105, type:"car_bike"},
+  {id:28, lat:35.7107, lon:139.7106, type:"intersection"},
+  {id:29, lat:35.7108, lon:139.7107, type:"car_bike"},
+  {id:30, lat:35.7109, lon:139.7108, type:"car_bike"},
+
+  // =========================
+  // 🌙 夜間事故エリア（少数・重要）
+  // =========================
+  {id:31, lat:35.7150, lon:139.7150, type:"night_accident"},
+  {id:32, lat:35.7151, lon:139.7151, type:"night_accident"},
+  {id:33, lat:35.7152, lon:139.7152, type:"night_accident"},
+  {id:34, lat:35.7160, lon:139.7160, type:"night_accident"},
+  {id:35, lat:35.7170, lon:139.7170, type:"night_accident"},
+
+  // =========================
+  // 🏠 住宅街（転倒・低速事故）
+  // =========================
+  {id:36, lat:35.7055, lon:139.7010, type:"bike_fall"},
+  {id:37, lat:35.7056, lon:139.7011, type:"bike_fall"},
+  {id:38, lat:35.7057, lon:139.7012, type:"bike_fall"},
+  {id:39, lat:35.7058, lon:139.7013, type:"bike_fall"},
+  {id:40, lat:35.7059, lon:139.7014, type:"bike_fall"},
+
+  // =========================
+  // 🚥 交差点C（高密度）
+  // =========================
+  {id:41, lat:35.7200, lon:139.7200, type:"intersection"},
+  {id:42, lat:35.7201, lon:139.7201, type:"car_bike"},
+  {id:43, lat:35.7202, lon:139.7202, type:"car_bike"},
+  {id:44, lat:35.7203, lon:139.7203, type:"car_bike"},
+  {id:45, lat:35.7204, lon:139.7204, type:"intersection"},
+  {id:46, lat:35.7205, lon:139.7205, type:"car_bike"},
+  {id:47, lat:35.7206, lon:139.7206, type:"car_bike"},
+  {id:48, lat:35.7207, lon:139.7207, type:"car_bike"},
+  {id:49, lat:35.7208, lon:139.7208, type:"intersection"},
+  {id:50, lat:35.7209, lon:139.7209, type:"car_bike"},
+
+  // =========================
+  // 🚗 幹線道路2
+  // =========================
+  {id:51, lat:35.7010, lon:139.7300, type:"car_bike"},
+  {id:52, lat:35.7020, lon:139.7300, type:"car_bike"},
+  {id:53, lat:35.7030, lon:139.7300, type:"car_bike"},
+  {id:54, lat:35.7040, lon:139.7300, type:"intersection"},
+  {id:55, lat:35.7050, lon:139.7300, type:"car_bike"},
+  {id:56, lat:35.7060, lon:139.7300, type:"car_bike"},
+  {id:57, lat:35.7070, lon:139.7300, type:"car_bike"},
+  {id:58, lat:35.7080, lon:139.7300, type:"intersection"},
+  {id:59, lat:35.7090, lon:139.7300, type:"car_bike"},
+  {id:60, lat:35.7100, lon:139.7300, type:"car_bike"},
+
+  // =========================
+  // 🌙 夜追加エリア
+  // =========================
+  {id:61, lat:35.7180, lon:139.7350, type:"night_accident"},
+  {id:62, lat:35.7181, lon:139.7351, type:"night_accident"},
+  {id:63, lat:35.7182, lon:139.7352, type:"night_accident"},
+  {id:64, lat:35.7183, lon:139.7353, type:"night_accident"},
+  {id:65, lat:35.7184, lon:139.7354, type:"night_accident"},
+
+  // =========================
+  // 🏠 転倒エリア2
+  // =========================
+  {id:66, lat:35.7120, lon:139.7000, type:"bike_fall"},
+  {id:67, lat:35.7121, lon:139.7001, type:"bike_fall"},
+  {id:68, lat:35.7122, lon:139.7002, type:"bike_fall"},
+  {id:69, lat:35.7123, lon:139.7003, type:"bike_fall"},
+  {id:70, lat:35.7124, lon:139.7004, type:"bike_fall"},
+
+  // =========================
+  // 🚥 交差点D
+  // =========================
+  {id:71, lat:35.7250, lon:139.7400, type:"intersection"},
+  {id:72, lat:35.7251, lon:139.7401, type:"car_bike"},
+  {id:73, lat:35.7252, lon:139.7402, type:"car_bike"},
+  {id:74, lat:35.7253, lon:139.7403, type:"car_bike"},
+  {id:75, lat:35.7254, lon:139.7404, type:"intersection"},
+  {id:76, lat:35.7255, lon:139.7405, type:"car_bike"},
+  {id:77, lat:35.7256, lon:139.7406, type:"car_bike"},
+  {id:78, lat:35.7257, lon:139.7407, type:"car_bike"},
+  {id:79, lat:35.7258, lon:139.7408, type:"intersection"},
+  {id:80, lat:35.7259, lon:139.7409, type:"car_bike"},
+
+  // =========================
+  // 🚗 幹線道路3
+  // =========================
+  {id:81, lat:35.7300, lon:139.7450, type:"car_bike"},
+  {id:82, lat:35.7310, lon:139.7450, type:"car_bike"},
+  {id:83, lat:35.7320, lon:139.7450, type:"car_bike"},
+  {id:84, lat:35.7330, lon:139.7450, type:"intersection"},
+  {id:85, lat:35.7340, lon:139.7450, type:"car_bike"},
+  {id:86, lat:35.7350, lon:139.7450, type:"car_bike"},
+  {id:87, lat:35.7360, lon:139.7450, type:"car_bike"},
+  {id:88, lat:35.7370, lon:139.7450, type:"intersection"},
+  {id:89, lat:35.7380, lon:139.7450, type:"car_bike"},
+  {id:90, lat:35.7390, lon:139.7450, type:"car_bike"},
+
+  // =========================
+  // 🧠 バランス調整残り
+  // =========================
+  {id:91, lat:35.7400, lon:139.7500, type:"intersection"},
+  {id:92, lat:35.7401, lon:139.7501, type:"car_bike"},
+  {id:93, lat:35.7402, lon:139.7502, type:"car_bike"},
+  {id:94, lat:35.7403, lon:139.7503, type:"bike_fall"},
+  {id:95, lat:35.7404, lon:139.7504, type:"car_bike"},
+  {id:96, lat:35.7405, lon:139.7505, type:"intersection"},
+  {id:97, lat:35.7406, lon:139.7506, type:"car_bike"},
+  {id:98, lat:35.7407, lon:139.7507, type:"night_accident"},
+  {id:99, lat:35.7408, lon:139.7508, type:"car_bike"},
+  {id:100, lat:35.7409, lon:139.7509, type:"car_bike"}
+];
+
+// 🚨 表示
+accidentData.forEach(a => {
+  L.circleMarker([a.lat, a.lon], {
+    radius: 6,
+    color: "red"
+  }).addTo(map).bindPopup(a.type);
+});
+
+// 📍 ユーザー位置
+let userLat = null;
+let userLon = null;
+let userMarker = null;
+
+// 📏 距離計算（m）
+function distance(lat1, lon1, lat2, lon2) {
+  return Math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2) * 111000;
+}
+
+// ⚠️ 危険度計算
+function calcRisk() {
+  let score = 0;
+
+  accidentData.forEach(a => {
+    const d = distance(userLat, userLon, a.lat, a.lon);
+
+    // 近いほど危険
+    if (d < 80) score += 25;
+    else if (d < 150) score += 15;
+    else if (d < 300) score += 5;
+
+    // タイプ別補正
+    if (a.type === "intersection") score += 10;
+    if (a.type === "night_accident") score += 15;
+  });
+
+  return Math.min(score, 100);
+}
+
+// 🎨 UI更新
+function updateUI() {
+  const risk = calcRisk();
+
+  const el = document.getElementById("risk");
+  el.innerText = risk;
+
+  if (risk < 30) el.style.color = "#22c55e";
+  else if (risk < 60) el.style.color = "#facc15";
+  else el.style.color = "#ef4444";
+}
+
+// 🔄 再計算
+function recalc() {
+  updateUI();
+}
+
+// 📡 GPS取得
+if (navigator.geolocation) {
+  navigator.geolocation.watchPosition(pos => {
+    userLat = pos.coords.latitude;
+    userLon = pos.coords.longitude;
+
+    document.getElementById("pos").innerText =
+      userLat.toFixed(5) + ", " + userLon.toFixed(5);
+
+    // マーカー更新
+    if (!userMarker) {
+      userMarker = L.marker([userLat, userLon]).addTo(map)
+        .bindPopup("あなた");
+    } else {
+      userMarker.setLatLng([userLat, userLon]);
+    }
+
+    map.setView([userLat, userLon]);
+
+    updateUI();
+
+  }, err => {
+    console.log("GPS error", err);
+
+    // fallback（東京固定）
+    userLat = 35.700;
+    userLon = 139.705;
+    document.getElementById("pos").innerText = "GPS失敗（モック）";
+    updateUI();
+  });
+}
+
+function startGPS() {
+  if (!navigator.geolocation) {
+    alert("GPS非対応ブラウザ");
+    return;
+  }
+
+  navigator.geolocation.watchPosition(
+    (pos) => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+
+      document.getElementById("pos").innerText =
+        userLat.toFixed(5) + ", " + userLon.toFixed(5);
+
+      console.log("GPS OK:", userLat, userLon);
+
+      // マーカー更新
+      if (!userMarker) {
+        userMarker = L.marker([userLat, userLon]).addTo(map)
+          .bindPopup("あなたの現在地");
+      } else {
+        userMarker.setLatLng([userLat, userLon]);
+      }
+
+      map.setView([userLat, userLon]);
+
+      updateUI();
+    },
+
+    (err) => {
+      console.error("GPS失敗:", err);
+
+      document.getElementById("pos").innerText =
+        "GPS失敗（権限 or HTTPS問題）";
+
+      // fallback（テスト用）
+      userLat = 35.700;
+      userLon = 139.705;
+
+      updateUI();
+    },
+
+    {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    }
+  );
+}
+
+startGPS();
+</script>
+
+</body>
+</html>
