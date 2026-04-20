@@ -98,6 +98,31 @@ function parseCSV(csvText) {
       const party1 = clean(c[18]);
       const party2 = clean(c[20]);
 
+      // 🚲 自転車判定
+      const isBike =
+        party1.includes("自転車") ||
+        party2.includes("自転車") ||
+        party1.includes("軽車両") ||
+        party2.includes("軽車両");
+
+      if (!isBike) return null;
+
+      return {
+        id: i + 1,
+        lat: parseFloat(c[1]),
+        lon: parseFloat(c[0]),
+
+        type: mapType(clean(c[7]), clean(c[10])),
+
+        meta: {
+          party1,
+          party2,
+          date: c[8]
+        }
+      };
+    })
+    .filter(Boolean);
+}
       // 🚲 自転車だけ抽出
       const isBike =
         party1.includes("自転車") ||
