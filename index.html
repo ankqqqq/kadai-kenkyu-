@@ -545,22 +545,38 @@ function recalc() {
 
 function startGPS() {
 
+
+
+let userLat = null;
+let userLon = null;
+
+let userMarker = null;
+
+let initialized = false;
+
+let currentSpeed = 0;
+let currentHeading = 0;
+
+function startGPS() {
+
+  // GPS対応確認
   if (!navigator.geolocation) {
 
-    alert("GPS未対応");
+    alert("このブラウザはGPSに対応していません");
 
     return;
   }
 
+  // GPS監視開始
   navigator.geolocation.watchPosition(
 
+    // =========================
+    // ✅ SUCCESS
+    // =========================
     pos => {
 
-      userLat =
-        pos.coords.latitude;
-
-      userLon =
-        pos.coords.longitude;
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
 
       currentSpeed =
         pos.coords.speed || 0;
@@ -568,12 +584,28 @@ function startGPS() {
       currentHeading =
         pos.coords.heading || 0;
 
-      document.getElementById("pos")
-        .innerText =
-        userLat.toFixed(5)
-        + ", "
-        + userLon.toFixed(5);
+      const accuracy =
+        pos.coords.accuracy;
 
+      console.log("GPS SUCCESS");
+
+      console.log({
+        lat: userLat,
+        lon: userLon,
+        accuracy,
+        speed: currentSpeed,
+        heading: currentHeading
+      });
+
+      // UI表示
+      document.getElementById("pos").innerHTML =
+        `
+        緯度: ${userLat.toFixed(5)}<br>
+        経度: ${userLon.toFixed(5)}<br>
+        精度: ${Math.round(accuracy)}m
+        `;
+
+      // マーカー生成
       if (!userMarker) {
 
         userMarker = L.marker(
@@ -582,12 +614,13 @@ function startGPS() {
 
       } else {
 
+        // 更新
         userMarker.setLatLng(
           [userLat, userLon]
         );
       }
 
-      // 初回だけ移動
+      // 初回のみカメラ移動
       if (!initialized) {
 
         map.setView(
@@ -598,32 +631,67 @@ function startGPS() {
         initialized = true;
       }
 
+      // 危険度更新
       updateUI();
-
     },
 
+    // =========================
+    // ❌ ERROR
+    // =========================
     err => {
 
-      console.warn(err);
+      console.error("GPS ERROR", err);
 
-      // GPS失敗時は地図中心
-      const center =
-        map.getCenter();
+      let message = "";
 
-      userLat = center.lat;
-      userLon = center.lng;
+      switch(err.code) {
 
+        case err.PERMISSION_DENIED:
+
+          message =
+            "位置情報が拒否されました。\n\n"
+            + "ブラウザの位置情報を許可してください。";
+
+          break;
+
+        case err.POSITION_UNAVAILABLE:
+
+          message =
+            "GPS位置情報を取得できません。\n\n"
+            + "Wi-Fi または GPS を ON にしてください。";
+
+          break;
+
+        case err.TIMEOUT:
+
+          message =
+            "GPS取得がタイムアウトしました。";
+
+          break;
+
+        default:
+
+          message =
+            "不明なGPSエラー";
+      }
+
+      alert(message);
+
+      // UI表示
       document.getElementById("pos")
         .innerText =
-        "GPS失敗";
-
-      updateUI();
+        "GPS取得失敗";
     },
 
+    // =========================
+    // ⚙️ OPTIONS
+    // =========================
     {
       enableHighAccuracy: true,
-      maximumAge: 3000,
-      timeout: 10000
+
+      timeout: 15000,
+
+      maximumAge: 0
     }
   );
 }
