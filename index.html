@@ -542,11 +542,8 @@ function recalc() {
 // ======================================================
 // 📡 GPS
 // ======================================================
-
-function startGPS() {
-
-
-
+ 
+// グローバル変数
 let userLat = null;
 let userLon = null;
 
@@ -557,22 +554,29 @@ let initialized = false;
 let currentSpeed = 0;
 let currentHeading = 0;
 
+let accuracyCircle = null;
+
+// GPS開始
 function startGPS() {
 
-  // GPS対応確認
+  // GPS対応チェック
   if (!navigator.geolocation) {
 
-    alert("このブラウザはGPSに対応していません");
+    alert("このブラウザはGPS未対応です");
 
     return;
   }
 
+  // 読み込み表示
+  document.getElementById("pos").innerHTML =
+    "GPS取得中...";
+
   // GPS監視開始
   navigator.geolocation.watchPosition(
 
-    // =========================
+    // ==================================================
     // ✅ SUCCESS
-    // =========================
+    // ==================================================
     pos => {
 
       userLat = pos.coords.latitude;
@@ -585,19 +589,11 @@ function startGPS() {
         pos.coords.heading || 0;
 
       const accuracy =
-        pos.coords.accuracy;
+        pos.coords.accuracy || 0;
 
-      console.log("GPS SUCCESS");
-
-      console.log({
-        lat: userLat,
-        lon: userLon,
-        accuracy,
-        speed: currentSpeed,
-        heading: currentHeading
-      });
-
-      // UI表示
+      // ==============================
+      // UI更新
+      // ==============================
       document.getElementById("pos").innerHTML =
         `
         緯度: ${userLat.toFixed(5)}<br>
@@ -605,22 +601,55 @@ function startGPS() {
         精度: ${Math.round(accuracy)}m
         `;
 
-      // マーカー生成
+      // ==============================
+      // USER MARKER
+      // ==============================
       if (!userMarker) {
 
         userMarker = L.marker(
-          [userLat, userLon]
+          [userLat, userLon],
+          {
+            title: "現在地"
+          }
         ).addTo(map);
 
       } else {
 
-        // 更新
         userMarker.setLatLng(
           [userLat, userLon]
         );
       }
 
-      // 初回のみカメラ移動
+      // ==============================
+      // 精度円
+      // ==============================
+      if (!accuracyCircle) {
+
+        accuracyCircle = L.circle(
+          [userLat, userLon],
+          {
+            radius: accuracy,
+            color: "#3b82f6",
+            fillColor: "#60a5fa",
+            fillOpacity: 0.15,
+            weight: 1
+          }
+        ).addTo(map);
+
+      } else {
+
+        accuracyCircle.setLatLng(
+          [userLat, userLon]
+        );
+
+        accuracyCircle.setRadius(
+          accuracy
+        );
+      }
+
+      // ==============================
+      // 初回だけ移動
+      // ==============================
       if (!initialized) {
 
         map.setView(
@@ -631,16 +660,18 @@ function startGPS() {
         initialized = true;
       }
 
+      // ==============================
       // 危険度更新
+      // ==============================
       updateUI();
     },
 
-    // =========================
+    // ==================================================
     // ❌ ERROR
-    // =========================
+    // ==================================================
     err => {
 
-      console.error("GPS ERROR", err);
+      console.error(err);
 
       let message = "";
 
@@ -649,40 +680,47 @@ function startGPS() {
         case err.PERMISSION_DENIED:
 
           message =
-            "位置情報が拒否されました。\n\n"
-            + "ブラウザの位置情報を許可してください。";
+            "位置情報が拒否されました";
 
           break;
 
         case err.POSITION_UNAVAILABLE:
 
           message =
-            "GPS位置情報を取得できません。\n\n"
-            + "Wi-Fi または GPS を ON にしてください。";
+            "GPS位置を取得できません";
 
           break;
 
         case err.TIMEOUT:
 
           message =
-            "GPS取得がタイムアウトしました。";
+            "GPS取得タイムアウト";
 
           break;
 
         default:
 
           message =
-            "不明なGPSエラー";
+            "GPSエラー";
       }
 
-      alert(message);
-
-      // UI表示
       document.getElementById("pos")
-        .innerText =
-        "GPS取得失敗";
+        .innerHTML =
+        `<span style="color:red">${message}</span>`;
     },
 
+    // ==================================================
+    // ⚙️ OPTIONS
+    // ==================================================
+    {
+      enableHighAccuracy: true,
+
+      timeout: 15000,
+
+      maximumAge: 2000
+    }
+  );
+}
     // =========================
     // ⚙️ OPTIONS
     // =========================
