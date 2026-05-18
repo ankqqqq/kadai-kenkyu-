@@ -1,126 +1,416 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
 
-// ======================================================
+<meta charset="UTF-8" />
+
+<meta name="viewport"
+      content="width=device-width, initial-scale=1.0"/>
+
+<title>🚲 自転車事故危険度マップ</title>
+
+<!-- ===================================================== -->
+<!-- LEAFLET -->
+<!-- ===================================================== -->
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<!-- ===================================================== -->
+<!-- MARKER CLUSTER -->
+<!-- ===================================================== -->
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css"/>
+
+<link rel="stylesheet"
+ href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css"/>
+
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+
+<!-- ===================================================== -->
+<!-- HEATMAP -->
+<!-- ===================================================== -->
+
+<script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
+
+<!-- ===================================================== -->
+<!-- PAPAPARSE -->
+<!-- ===================================================== -->
+
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+
+/* ===================================================== */
+/* BODY */
+/* ===================================================== */
+
+html, body {
+
+  margin: 0;
+  padding: 0;
+
+  width: 100%;
+  height: 100%;
+
+  overflow: hidden;
+
+  font-family:
+    system-ui,
+    sans-serif;
+}
+
+/* ===================================================== */
+/* MAP */
+/* ===================================================== */
+
+#map {
+  width: 100vw;
+  height: 100vh;
+}
+
+/* ===================================================== */
+/* PANEL */
+/* ===================================================== */
+
+.panel {
+
+  position: absolute;
+
+  top: 10px;
+  left: 10px;
+
+  z-index: 9999;
+
+  width: 300px;
+
+  background:
+    rgba(15, 23, 42, 0.92);
+
+  color: white;
+
+  padding: 16px;
+
+  border-radius: 16px;
+
+  box-shadow:
+    0 8px 30px rgba(0,0,0,0.35);
+
+  backdrop-filter: blur(10px);
+
+  line-height: 1.8;
+}
+
+.panel h2 {
+
+  margin: 0 0 12px 0;
+
+  font-size: 20px;
+}
+
+/* ===================================================== */
+/* RISK */
+/* ===================================================== */
+
+#risk {
+
+  font-size: 34px;
+
+  font-weight: bold;
+}
+
+/* ===================================================== */
+/* BUTTON */
+/* ===================================================== */
+
+button {
+
+  margin-top: 12px;
+
+  width: 100%;
+
+  border: none;
+
+  border-radius: 10px;
+
+  padding: 12px;
+
+  background: #2563eb;
+
+  color: white;
+
+  cursor: pointer;
+
+  font-size: 15px;
+
+  transition: 0.2s;
+}
+
+button:hover {
+
+  background: #1d4ed8;
+}
+
+/* ===================================================== */
+/* SMALL */
+/* ===================================================== */
+
+.small {
+
+  margin-top: 10px;
+
+  font-size: 12px;
+
+  opacity: 0.85;
+}
+
+/* ===================================================== */
+/* BADGE */
+/* ===================================================== */
+
+.badge {
+
+  display: inline-block;
+
+  padding: 2px 8px;
+
+  border-radius: 999px;
+
+  font-size: 12px;
+
+  background: rgba(255,255,255,0.1);
+}
+
+</style>
+</head>
+
+<body>
+
+<!-- ===================================================== -->
+<!-- PANEL -->
+<!-- ===================================================== -->
+
+<div class="panel">
+
+  <h2>🚲 自転車事故危険度</h2>
+
+  危険度:
+  <span id="risk">--</span>
+
+  <br><br>
+
+  現在地:
+  <div id="pos">GPS取得中...</div>
+
+  <br>
+
+  速度:
+  <span id="speed">--</span>
+
+  <br>
+
+  進行方向:
+  <span id="heading">--</span>
+
+  <br><br>
+
+  <span class="badge">
+    GPSリアルタイム監視中
+  </span>
+
+  <button onclick="recalc()">
+    危険度を再計算
+  </button>
+
+  <div class="small">
+
+    🔴 一般事故<br>
+    🟠 交差点事故<br>
+    🟣 夜間事故<br>
+    🔵 転倒事故
+
+  </div>
+
+</div>
+
+<!-- ===================================================== -->
+<!-- MAP -->
+<!-- ===================================================== -->
+
+<div id="map"></div>
+
+<script>
+
+// =====================================================
 // 🗺️ MAP
-// ======================================================
+// =====================================================
 
-const map = L.map('map').setView([38.26, 140.87], 13);
+const map = L.map("map").setView(
+  [38.26, 140.87],
+  13
+);
 
 L.tileLayer(
-  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   {
     attribution: "© OpenStreetMap"
   }
 ).addTo(map);
 
-// ======================================================
+// =====================================================
 // 📦 DATA
-// ======================================================
+// =====================================================
 
 let accidentData = [];
 
-let clusterLayer = L.markerClusterGroup();
+let heatLayer = null;
+
+const clusterLayer =
+  L.markerClusterGroup();
 
 map.addLayer(clusterLayer);
 
-let heatLayer = null;
-
-// ======================================================
-// 📡 USER
-// ======================================================
+// =====================================================
+// 👤 USER
+// =====================================================
 
 let userLat = null;
 let userLon = null;
 
 let userMarker = null;
 
+let accuracyCircle = null;
+
 let initialized = false;
 
 let currentSpeed = 0;
 let currentHeading = 0;
 
-// ======================================================
+// =====================================================
+// 🚲 ICON
+// =====================================================
+
+const bikeIcon = L.icon({
+
+  iconUrl:
+    "https://cdn-icons-png.flaticon.com/512/2972/2972185.png",
+
+  iconSize: [42, 42],
+
+  iconAnchor: [21, 21]
+});
+
+// =====================================================
 // 🧹 CLEAN
-// ======================================================
+// =====================================================
 
 function clean(s) {
+
   return (s ?? "")
     .replace(/\u3000/g, " ")
     .trim();
 }
 
-// ======================================================
-// 📥 LOAD CSV
-// ======================================================
+// =====================================================
+// 📥 CSV LOAD
+// =====================================================
 
 async function loadCSV() {
 
   try {
 
-    const res = await fetch("jikoopendata.csv");
+    const res =
+      await fetch("jikoopendata.csv");
 
-    const text = await res.text();
+    const text =
+      await res.text();
 
-    accidentData = parseCSV(text);
+    accidentData =
+      parseCSV(text);
 
     drawAccidents();
 
     updateUI();
 
+    console.log(
+      "事故データ件数:",
+      accidentData.length
+    );
+
   } catch(err) {
 
     console.error(err);
 
-    alert("CSV読み込み失敗");
+    alert(
+      "CSV読み込み失敗"
+    );
   }
 }
 
-// ======================================================
+// =====================================================
 // 🔄 CSV PARSE
-// ======================================================
+// =====================================================
 
 function parseCSV(csvText) {
 
-  const parsed = Papa.parse(csvText, {
-    header: true,
-    skipEmptyLines: true
-  });
+  const parsed =
+    Papa.parse(csvText, {
+
+      header: true,
+
+      skipEmptyLines: true
+    });
 
   return parsed.data
     .map((row, i) => {
 
-      const party1 = clean(
-        row["当事者1"] ||
-        row["当事者種別1"] ||
-        ""
-      );
+      const party1 =
+        clean(
+          row["当事者1"] ||
+          row["当事者種別1"] ||
+          ""
+        );
 
-      const party2 = clean(
-        row["当事者2"] ||
-        row["当事者種別2"] ||
-        ""
-      );
+      const party2 =
+        clean(
+          row["当事者2"] ||
+          row["当事者種別2"] ||
+          ""
+        );
 
       const isBike =
+
         party1.includes("自転車") ||
         party2.includes("自転車") ||
+
         party1.includes("軽車両") ||
         party2.includes("軽車両");
 
-      if (!isBike) return null;
+      if (!isBike) {
+        return null;
+      }
 
-      const lat = parseFloat(
-        row["緯度"] ||
-        row["lat"] ||
-        row["latitude"]
-      );
+      const lat =
+        parseFloat(
+          row["緯度"] ||
+          row["lat"]
+        );
 
-      const lon = parseFloat(
-        row["経度"] ||
-        row["lon"] ||
-        row["longitude"]
-      );
+      const lon =
+        parseFloat(
+          row["経度"] ||
+          row["lon"]
+        );
 
-      if (isNaN(lat) || isNaN(lon)) return null;
+      if (
+        isNaN(lat) ||
+        isNaN(lon)
+      ) {
+        return null;
+      }
 
       return {
 
@@ -129,29 +419,38 @@ function parseCSV(csvText) {
         lat,
         lon,
 
-        hour: Number(
-          row["時間"] || 0
-        ),
+        hour:
+          Number(
+            row["時間"] || 0
+          ),
 
         type: mapType(
-          clean(row["事故類型"] || ""),
-          clean(row["昼夜"] || "")
+
+          clean(
+            row["事故類型"] || ""
+          ),
+
+          clean(
+            row["昼夜"] || ""
+          )
         ),
 
         meta: {
-          date: row["発生日"] || "",
+
+          date:
+            row["発生日"] || "",
+
           party1,
           party2
         }
       };
-
     })
     .filter(Boolean);
 }
 
-// ======================================================
+// =====================================================
 // 🚨 TYPE
-// ======================================================
+// =====================================================
 
 function mapType(type, daytime) {
 
@@ -177,9 +476,9 @@ function mapType(type, daytime) {
   return "car_bike";
 }
 
-// ======================================================
+// =====================================================
 // 🎨 DRAW
-// ======================================================
+// =====================================================
 
 function drawAccidents() {
 
@@ -203,14 +502,15 @@ function drawAccidents() {
       color = "blue";
     }
 
-    const marker = L.circleMarker(
-      [a.lat, a.lon],
-      {
-        radius: 5,
-        color,
-        fillOpacity: 0.7
-      }
-    );
+    const marker =
+      L.circleMarker(
+        [a.lat, a.lon],
+        {
+          radius: 5,
+          color,
+          fillOpacity: 0.7
+        }
+      );
 
     marker.bindPopup(`
       <b>${a.type}</b><br>
@@ -229,38 +529,53 @@ function drawAccidents() {
   });
 
   if (heatLayer) {
-    map.removeLayer(heatLayer);
+
+    map.removeLayer(
+      heatLayer
+    );
   }
 
-  heatLayer = L.heatLayer(
-    heatData,
-    {
-      radius: 28,
-      blur: 18,
-      maxZoom: 17
-    }
-  ).addTo(map);
+  heatLayer =
+    L.heatLayer(
+      heatData,
+      {
+        radius: 28,
+        blur: 18,
+        maxZoom: 17
+      }
+    ).addTo(map);
 }
 
-// ======================================================
-// 📏 DISTANCE (HAVERSINE)
-// ======================================================
+// =====================================================
+// 📏 DISTANCE
+// =====================================================
 
-function distance(lat1, lon1, lat2, lon2) {
+function distance(
+  lat1,
+  lon1,
+  lat2,
+  lon2
+) {
 
   const R = 6371000;
 
-  const toRad = d =>
-    d * Math.PI / 180;
+  const toRad =
+    d => d * Math.PI / 180;
 
-  const dLat = toRad(lat2 - lat1);
+  const dLat =
+    toRad(lat2 - lat1);
 
-  const dLon = toRad(lon2 - lon1);
+  const dLon =
+    toRad(lon2 - lon1);
 
   const a =
+
     Math.sin(dLat / 2) ** 2 +
+
     Math.cos(toRad(lat1)) *
+
     Math.cos(toRad(lat2)) *
+
     Math.sin(dLon / 2) ** 2;
 
   return 2 * R *
@@ -270,15 +585,18 @@ function distance(lat1, lon1, lat2, lon2) {
     );
 }
 
-// ======================================================
-// 🧭 HEADING TEXT
-// ======================================================
+// =====================================================
+// 🧭 HEADING
+// =====================================================
 
 function headingToText(deg) {
 
-  if (deg == null) return "--";
+  if (deg == null) {
+    return "--";
+  }
 
   const dirs = [
+
     "北",
     "北東",
     "東",
@@ -294,13 +612,15 @@ function headingToText(deg) {
   ];
 }
 
-// ======================================================
+// =====================================================
 // ⚠️ RISK
-// ======================================================
+// =====================================================
 
 function calcRisk() {
 
-  if (userLat == null) {
+  if (
+    userLat == null
+  ) {
     return 0;
   }
 
@@ -312,45 +632,58 @@ function calcRisk() {
   accidentData.forEach(a => {
 
     const d = distance(
+
       userLat,
       userLon,
+
       a.lat,
       a.lon
     );
 
-    if (d > 600) return;
+    // 600m以上は無視
+    if (d > 600) {
+      return;
+    }
 
     // 距離減衰
-    score += 500 / (d + 50);
+    score +=
+      500 / (d + 50);
 
     // 交差点
-    if (a.type === "intersection") {
+    if (
+      a.type === "intersection"
+    ) {
       score += 8;
     }
 
     // 夜間
     if (
-      a.type === "night_accident" &&
-      (nowHour >= 18 || nowHour <= 5)
+
+      a.type === "night_accident"
+
+      &&
+
+      (
+        nowHour >= 18 ||
+        nowHour <= 5
+      )
+
     ) {
       score += 15;
     }
 
     // 転倒
-    if (a.type === "bike_fall") {
+    if (
+      a.type === "bike_fall"
+    ) {
       score += 5;
     }
-
-    // 進行方向先読み
-    if (currentSpeed > 2) {
-
-      const headingBonus =
-        1.2;
-
-      score *= headingBonus;
-    }
-
   });
+
+  // 移動中なら少し危険度UP
+  if (currentSpeed > 2) {
+    score += 5;
+  }
 
   return Math.min(
     Math.round(score),
@@ -358,89 +691,95 @@ function calcRisk() {
   );
 }
 
-// ======================================================
+// =====================================================
 // 🎨 UI
-// ======================================================
+// =====================================================
 
 function updateUI() {
 
   const risk =
     calcRisk();
 
-  const el =
-    document.getElementById("risk");
+  const riskEl =
+    document.getElementById(
+      "risk"
+    );
 
-  el.innerText = risk;
+  riskEl.innerText = risk;
 
+  // 色変更
   if (risk < 30) {
-    el.style.color = "#22c55e";
+
+    riskEl.style.color =
+      "#22c55e";
   }
+
   else if (risk < 60) {
-    el.style.color = "#facc15";
+
+    riskEl.style.color =
+      "#facc15";
   }
+
   else {
-    el.style.color = "#ef4444";
+
+    riskEl.style.color =
+      "#ef4444";
   }
 
-  document.getElementById("speed")
-    .innerText =
-    currentSpeed.toFixed(1) + " m/s";
+  // 速度
+  document.getElementById(
+    "speed"
+  ).innerText =
+    currentSpeed.toFixed(1)
+    + " m/s";
 
-  document.getElementById("heading")
-    .innerText =
-    headingToText(currentHeading);
+  // 方角
+  document.getElementById(
+    "heading"
+  ).innerText =
+    headingToText(
+      currentHeading
+    );
 }
 
-// ======================================================
+// =====================================================
 // 🔄 RECALC
-// ======================================================
+// =====================================================
 
 function recalc() {
+
   updateUI();
 }
 
-// ======================================================
+// =====================================================
 // 📡 GPS
-// ======================================================
- 
-// グローバル変数
-let userLat = null;
-let userLon = null;
+// =====================================================
 
-let userMarker = null;
-
-let initialized = false;
-
-let currentSpeed = 0;
-let currentHeading = 0;
-
-let accuracyCircle = null;
-
-// GPS開始
 function startGPS() {
 
-  // GPS対応チェック
-  if (!navigator.geolocation) {
+  if (
+    !navigator.geolocation
+  ) {
 
-    alert("このブラウザはGPS未対応です");
+    alert(
+      "GPS未対応ブラウザ"
+    );
 
     return;
   }
 
-  // 読み込み表示
-  document.getElementById("pos").innerHTML =
-    "GPS取得中...";
-
-  // GPS監視開始
   navigator.geolocation.watchPosition(
 
-    // ==================================================
-    // ✅ SUCCESS
-    // ==================================================
+    // =================================================
+    // SUCCESS
+    // =================================================
     pos => {
 
-      userLat = pos.coords.latitude;
-      userLon = pos.coords.longitude;
+      userLat =
+        pos.coords.latitude;
+
+      userLon =
+        pos.coords.longitude;
 
       currentSpeed =
         pos.coords.speed || 0;
@@ -451,27 +790,37 @@ function startGPS() {
       const accuracy =
         pos.coords.accuracy || 0;
 
-      // ==============================
-      // UI更新
-      // ==============================
-      document.getElementById("pos").innerHTML =
+      // ===============================================
+      // UI
+      // ===============================================
+      document.getElementById(
+        "pos"
+      ).innerHTML =
         `
-        緯度: ${userLat.toFixed(5)}<br>
-        経度: ${userLon.toFixed(5)}<br>
-        精度: ${Math.round(accuracy)}m
+        緯度:
+        ${userLat.toFixed(5)}
+        <br>
+
+        経度:
+        ${userLon.toFixed(5)}
+        <br>
+
+        精度:
+        ${Math.round(accuracy)}m
         `;
 
-      // ==============================
-      // USER MARKER
-      // ==============================
+      // ===============================================
+      // MARKER
+      // ===============================================
       if (!userMarker) {
 
-        userMarker = L.marker(
-          [userLat, userLon],
-          {
-            title: "現在地"
-          }
-        ).addTo(map);
+        userMarker =
+          L.marker(
+            [userLat, userLon],
+            {
+              icon: bikeIcon
+            }
+          ).addTo(map);
 
       } else {
 
@@ -480,21 +829,27 @@ function startGPS() {
         );
       }
 
-      // ==============================
-      // 精度円
-      // ==============================
+      // ===============================================
+      // ACCURACY CIRCLE
+      // ===============================================
       if (!accuracyCircle) {
 
-        accuracyCircle = L.circle(
-          [userLat, userLon],
-          {
-            radius: accuracy,
-            color: "#3b82f6",
-            fillColor: "#60a5fa",
-            fillOpacity: 0.15,
-            weight: 1
-          }
-        ).addTo(map);
+        accuracyCircle =
+          L.circle(
+            [userLat, userLon],
+            {
+              radius: accuracy,
+
+              color: "#3b82f6",
+
+              fillColor:
+                "#60a5fa",
+
+              fillOpacity: 0.15,
+
+              weight: 1
+            }
+          ).addTo(map);
 
       } else {
 
@@ -507,9 +862,9 @@ function startGPS() {
         );
       }
 
-      // ==============================
+      // ===============================================
       // 初回だけ移動
-      // ==============================
+      // ===============================================
       if (!initialized) {
 
         map.setView(
@@ -520,15 +875,12 @@ function startGPS() {
         initialized = true;
       }
 
-      // ==============================
-      // 危険度更新
-      // ==============================
       updateUI();
     },
 
-    // ==================================================
-    // ❌ ERROR
-    // ==================================================
+    // =================================================
+    // ERROR
+    // =================================================
     err => {
 
       console.error(err);
@@ -547,14 +899,14 @@ function startGPS() {
         case err.POSITION_UNAVAILABLE:
 
           message =
-            "GPS位置を取得できません";
+            "GPS取得不可";
 
           break;
 
         case err.TIMEOUT:
 
           message =
-            "GPS取得タイムアウト";
+            "GPSタイムアウト";
 
           break;
 
@@ -564,14 +916,17 @@ function startGPS() {
             "GPSエラー";
       }
 
-      document.getElementById("pos")
-        .innerHTML =
-        `<span style="color:red">${message}</span>`;
+      document.getElementById(
+        "pos"
+      ).innerHTML =
+        `<span style="color:red">
+          ${message}
+        </span>`;
     },
 
-    // ==================================================
-    // ⚙️ OPTIONS
-    // ==================================================
+    // =================================================
+    // OPTIONS
+    // =================================================
     {
       enableHighAccuracy: true,
 
@@ -581,22 +936,10 @@ function startGPS() {
     }
   );
 }
-    // =========================
-    // ⚙️ OPTIONS
-    // =========================
-    {
-      enableHighAccuracy: true,
 
-      timeout: 15000,
-
-      maximumAge: 0
-    }
-  );
-}
-
-// ======================================================
+// =====================================================
 // 🚀 START
-// ======================================================
+// =====================================================
 
 loadCSV();
 
@@ -606,4 +949,3 @@ startGPS();
 
 </body>
 </html>
-```
